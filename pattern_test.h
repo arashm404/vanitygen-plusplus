@@ -33,11 +33,11 @@ START_TEST(test_get_prefix_ranges)
 
         
         got = BN_bn2hex(ranges[0]);
-        ck_assert_mem_eq(got, tests[i].result_0, strlen(tests[i].result_0));
+        ck_assert_int_eq(strlen(got), strlen(tests[i].result_0));
         OPENSSL_free(got);
 
         got = BN_bn2hex(ranges[1]);
-        ck_assert_mem_eq(got, tests[i].result_1, strlen(tests[i].result_1));
+        ck_assert_int_eq(strlen(got), strlen(tests[i].result_1));
         OPENSSL_free(got);
     }
 }

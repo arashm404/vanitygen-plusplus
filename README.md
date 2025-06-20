@@ -89,6 +89,10 @@ Step 2: Build executable file:
 ```
 $ make          # build: vanitygen++ keyconv
 $ make all      # build: vanitygen++ keyconv oclvanitygen++ oclvanityminer
+
+The provided Makefile enables native CPU optimizations (`-march=native` and
+`-funroll-loops`) for faster key generation. Ensure you build on the target
+machine to take advantage of these optimizations.
 ```
 
 ## Method 2: Install dependencies automatically (nix-build)
