@@ -33,7 +33,14 @@
 #include <stddef.h>
 #include <string.h>
 
+
 #include "sph_groestl.h"
+
+#if defined(__GNUC__) || defined(__clang__)
+#  define INLINE static inline __attribute__((always_inline))
+#else
+#  define INLINE static inline
+#endif
 
 #if SPH_SMALL_FOOTPRINT && !defined SPH_SMALL_FOOTPRINT_GROESTL
 #define SPH_SMALL_FOOTPRINT_GROESTL   1
@@ -156,9 +163,7 @@
 
 #endif
 
-#if SPH_GROESTL_64
-
-static const sph_u64 T0[] = {
+static const sph_u64 T0[] __attribute__((aligned(64))) = {
 	C64e(0xc632f4a5f497a5c6), C64e(0xf86f978497eb84f8),
 	C64e(0xee5eb099b0c799ee), C64e(0xf67a8c8d8cf78df6),
 	C64e(0xffe8170d17e50dff), C64e(0xd60adcbddcb7bdd6),
@@ -289,9 +294,7 @@ static const sph_u64 T0[] = {
 	C64e(0x6d0c61d661dad66d), C64e(0x2c624e3a4e583a2c)
 };
 
-#if !SPH_SMALL_FOOTPRINT_GROESTL
-
-static const sph_u64 T1[] = {
+static const sph_u64 T1[] __attribute__((aligned(64))) = {
 	C64e(0xc6c632f4a5f497a5), C64e(0xf8f86f978497eb84),
 	C64e(0xeeee5eb099b0c799), C64e(0xf6f67a8c8d8cf78d),
 	C64e(0xffffe8170d17e50d), C64e(0xd6d60adcbddcb7bd),
@@ -422,7 +425,7 @@ static const sph_u64 T1[] = {
 	C64e(0x6d6d0c61d661dad6), C64e(0x2c2c624e3a4e583a)
 };
 
-static const sph_u64 T2[] = {
+static const sph_u64 T2[] __attribute__((aligned(64))) = {
 	C64e(0xa5c6c632f4a5f497), C64e(0x84f8f86f978497eb),
 	C64e(0x99eeee5eb099b0c7), C64e(0x8df6f67a8c8d8cf7),
 	C64e(0x0dffffe8170d17e5), C64e(0xbdd6d60adcbddcb7),
@@ -553,7 +556,7 @@ static const sph_u64 T2[] = {
 	C64e(0xd66d6d0c61d661da), C64e(0x3a2c2c624e3a4e58)
 };
 
-static const sph_u64 T3[] = {
+static const sph_u64 T3[] __attribute__((aligned(64))) = {
 	C64e(0x97a5c6c632f4a5f4), C64e(0xeb84f8f86f978497),
 	C64e(0xc799eeee5eb099b0), C64e(0xf78df6f67a8c8d8c),
 	C64e(0xe50dffffe8170d17), C64e(0xb7bdd6d60adcbddc),
@@ -684,9 +687,7 @@ static const sph_u64 T3[] = {
 	C64e(0xdad66d6d0c61d661), C64e(0x583a2c2c624e3a4e)
 };
 
-#endif
-
-static const sph_u64 T4[] = {
+static const sph_u64 T4[] __attribute__((aligned(64))) = {
 	C64e(0xf497a5c6c632f4a5), C64e(0x97eb84f8f86f9784),
 	C64e(0xb0c799eeee5eb099), C64e(0x8cf78df6f67a8c8d),
 	C64e(0x17e50dffffe8170d), C64e(0xdcb7bdd6d60adcbd),
@@ -817,9 +818,7 @@ static const sph_u64 T4[] = {
 	C64e(0x61dad66d6d0c61d6), C64e(0x4e583a2c2c624e3a)
 };
 
-#if !SPH_SMALL_FOOTPRINT_GROESTL
-
-static const sph_u64 T5[] = {
+static const sph_u64 T5[] __attribute__((aligned(64))) = {
 	C64e(0xa5f497a5c6c632f4), C64e(0x8497eb84f8f86f97),
 	C64e(0x99b0c799eeee5eb0), C64e(0x8d8cf78df6f67a8c),
 	C64e(0x0d17e50dffffe817), C64e(0xbddcb7bdd6d60adc),
@@ -950,7 +949,7 @@ static const sph_u64 T5[] = {
 	C64e(0xd661dad66d6d0c61), C64e(0x3a4e583a2c2c624e)
 };
 
-static const sph_u64 T6[] = {
+static const sph_u64 T6[] __attribute__((aligned(64))) = {
 	C64e(0xf4a5f497a5c6c632), C64e(0x978497eb84f8f86f),
 	C64e(0xb099b0c799eeee5e), C64e(0x8c8d8cf78df6f67a),
 	C64e(0x170d17e50dffffe8), C64e(0xdcbddcb7bdd6d60a),
@@ -1081,7 +1080,7 @@ static const sph_u64 T6[] = {
 	C64e(0x61d661dad66d6d0c), C64e(0x4e3a4e583a2c2c62)
 };
 
-static const sph_u64 T7[] = {
+static const sph_u64 T7[] __attribute__((aligned(64))) = {
 	C64e(0x32f4a5f497a5c6c6), C64e(0x6f978497eb84f8f8),
 	C64e(0x5eb099b0c799eeee), C64e(0x7a8c8d8cf78df6f6),
 	C64e(0xe8170d17e50dffff), C64e(0x0adcbddcb7bdd6d6),
@@ -1212,7 +1211,7 @@ static const sph_u64 T7[] = {
 	C64e(0x0c61d661dad66d6d), C64e(0x624e3a4e583a2c2c)
 };
 
-#endif
+/* End table alignment section */
 
 #define DECL_STATE_SMALL \
 	sph_u64 H[8];
@@ -1347,18 +1346,30 @@ static const sph_u64 T7[] = {
 
 #endif
 
-#define COMPRESS_SMALL   do { \
-		sph_u64 g[8], m[8]; \
-		size_t u; \
-		for (u = 0; u < 8; u ++) { \
-			m[u] = dec64e_aligned(buf + (u << 3)); \
-			g[u] = m[u] ^ H[u]; \
-		} \
-		PERM_SMALL_P(g); \
-		PERM_SMALL_Q(m); \
-		for (u = 0; u < 8; u ++) \
-			H[u] ^= g[u] ^ m[u]; \
-	} while (0)
+
+#define PREFETCH_ROUNDS(buf) \
+    do { \
+        __builtin_prefetch((buf) +  0*8, 0, 3); \
+        __builtin_prefetch((buf) +  1*8, 0, 3); \
+        __builtin_prefetch((buf) +  2*8, 0, 3); \
+        __builtin_prefetch((buf) +  3*8, 0, 3); \
+    } while (0)
+
+INLINE void compress_small_buf(const uint8_t *restrict buf, sph_u64 H[8]) {
+    PREFETCH_ROUNDS(buf);
+    sph_u64 g[8], m[8];
+    size_t u;
+    for (u = 0; u < 8; u ++) {
+        m[u] = dec64e_aligned(buf + (u << 3));
+        g[u] = m[u] ^ H[u];
+    }
+    PERM_SMALL_P(g);
+    PERM_SMALL_Q(m);
+    for (u = 0; u < 8; u ++)
+        H[u] ^= g[u] ^ m[u];
+}
+#undef COMPRESS_SMALL
+#define COMPRESS_SMALL compress_small_buf(buf, H)
 
 #define FINAL_SMALL   do { \
 		sph_u64 x[8]; \

@@ -1448,8 +1448,8 @@ vg_ocl_put_point_tpa(unsigned char *buf, int cell, const EC_POINT *ppnt)
 	//	__builtin_dump_struct(ppnt, &printf);
 	vg_ocl_put_point(pntbuf, ppnt);
 
-	start = ((((2 * cell) / ACCESS_STRIDE) * ACCESS_BUNDLE) +
-		 (cell % (ACCESS_STRIDE/2)));
+	/* optimize division/mod by bit-shift (ACCESS_STRIDE=128, ACCESS_BUNDLE=1024) */
+	start = (((cell >> 6) << 10) + (cell & 63));
 	for (i = 0; i < 8; i++)
 		memcpy(buf + 4*(start + i*ACCESS_STRIDE),
 		       pntbuf+(i*4),
@@ -1466,8 +1466,8 @@ vg_ocl_get_point_tpa(EC_POINT *ppnt, const unsigned char *buf, int cell)
 	unsigned char pntbuf[64];
 	int start, i;
 
-	start = ((((2 * cell) / ACCESS_STRIDE) * ACCESS_BUNDLE) +
-		 (cell % (ACCESS_STRIDE/2)));
+	/* optimize division/mod by bit-shift (ACCESS_STRIDE=128, ACCESS_BUNDLE=1024) */
+	start = (((cell >> 6) << 10) + (cell & 63));
 	for (i = 0; i < 8; i++)
 		memcpy(pntbuf+(i*4),
 		       buf + 4*(start + i*ACCESS_STRIDE),

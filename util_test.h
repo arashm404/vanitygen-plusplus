@@ -2,23 +2,25 @@ START_TEST(test_hex_enc)
 {
     struct {
         const char* input;
+        size_t input_len;
         const char* expect_output;
+        size_t expect_len;
     } tests[] = {
-        { "\x01", "\x30\x31" },
-        { "\x11", "\x31\x31" },
-        { "\xff", "\x66\x66" },
-        { "\x12\xab", "\x31\x32\x61\x62" },
+        { "\x01", 1, "\x30\x31", 2 },
+        { "\x11", 1, "\x31\x31", 2 },
+        { "\xff", 1, "\x66\x66", 2 },
+        { "\x12\xab", 2, "\x31\x32\x61\x62", 4 },
     };
 
     size_t n = sizeof(tests) / sizeof(tests[0]);
 
-    for (int i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
         char got[1024];
         size_t len = 1024;
 
-        hex_enc(got, &len, tests[i].input, strlen(tests[i].input));
+        hex_enc(got, &len, tests[i].input, tests[i].input_len);
 
-        ck_assert_int_eq(len, strlen(tests[i].expect_output));
+        ck_assert_int_eq(len, tests[i].expect_len);
         ck_assert_mem_eq(got, tests[i].expect_output, len);
     }
 }
@@ -28,25 +30,27 @@ START_TEST(test_hex_dec)
 {
     struct {
         const char* input;
+        size_t input_len;
         const char* expect_output;
+        size_t expect_len;
     } tests[] = {
-        { "\x30\x31", "\x01" },
-        { "\x31\x31", "\x11" },
-        { "\x46\x46", "\xff" },
-        { "\x66\x66", "\xff" },
-        { "\x31\x32\x41\x42", "\x12\xab" },
-        { "\x31\x32\x61\x62", "\x12\xab" },
+        { "\x30\x31", 2, "\x01", 1 },
+        { "\x31\x31", 2, "\x11", 1 },
+        { "\x46\x46", 2, "\xff", 1 },
+        { "\x66\x66", 2, "\xff", 1 },
+        { "\x31\x32\x41\x42", 4, "\x12\xab", 2 },
+        { "\x31\x32\x61\x62", 4, "\x12\xab", 2 },
     };
 
     size_t n = sizeof(tests) / sizeof(tests[0]);
 
-    for (int i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
         char got[1024];
         size_t len = 1024;
 
-        hex_dec(got, &len, tests[i].input, strlen(tests[i].input));
+        hex_dec(got, &len, tests[i].input, tests[i].input_len);
 
-        ck_assert_int_eq(len, strlen(tests[i].expect_output));
+        ck_assert_int_eq(len, tests[i].expect_len);
         ck_assert_mem_eq(got, tests[i].expect_output, len);
     }
 }

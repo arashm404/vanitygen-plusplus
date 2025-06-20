@@ -16,23 +16,34 @@
  * along with Vanitygen.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#if !defined (__VG_WINGLUE_H__)
-#define __VG_WINGLUE_H__
+#pragma once
 
 #include <windows.h>
 #include <tchar.h>
 #include <time.h>
 
-#define INLINE
+
+#include <stddef.h>
+
+#if defined(__GNUC__) || defined(__clang__)
+#  define INLINE static inline __attribute__((always_inline))
+#  define likely(x)   __builtin_expect(!!(x), 1)
+#  define unlikely(x) __builtin_expect(!!(x), 0)
+#else
+#  define INLINE static inline
+#  define likely(x)   (x)
+#  define unlikely(x) (x)
+#endif
+
 #define snprintf _snprintf
 
 struct timezone;
 
-extern int gettimeofday(struct timeval *tv, struct timezone *tz);
-extern void timeradd(struct timeval *a, struct timeval *b,
-		     struct timeval *result);
-extern void timersub(struct timeval *a, struct timeval *b,
-		     struct timeval *result);
+INLINE int gettimeofday(struct timeval *restrict tv, struct timezone *restrict tz);
+INLINE void timeradd(const struct timeval *restrict a, const struct timeval *restrict b,
+		     struct timeval *restrict result);
+INLINE void timersub(const struct timeval *restrict a, const struct timeval *restrict b,
+		     struct timeval *restrict result);
 
 extern TCHAR *optarg;
 extern int optind;
@@ -48,4 +59,3 @@ strtok_r(char *strToken, const char *strDelimit, char **context) {
 	return strtok_s(strToken, strDelimit, context);
 }
 
-#endif /* !defined (__VG_WINGLUE_H__) */

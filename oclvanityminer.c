@@ -21,6 +21,16 @@
 #include <math.h>
 #include <assert.h>
 
+#if defined(__GNUC__) || defined(__clang__)
+#  define INLINE static inline __attribute__((always_inline))
+#  define likely(x)   __builtin_expect(!!(x), 1)
+#  define unlikely(x) __builtin_expect(!!(x), 0)
+#else
+#  define INLINE static inline
+#  define likely(x)   (x)
+#  define unlikely(x) (x)
+#endif
+
 #include <pthread.h>
 
 #include <openssl/ec.h>
@@ -64,15 +74,12 @@ typedef struct workitem_s {
 } workitem_t;
 
 
-static int
-workitem_cmp(workitem_t *a, workitem_t *b)
-{
-	int cmpres;
-	cmpres = strcmp(a->pattern, b->pattern);
-	if (!cmpres)
-		cmpres = (a->reward < b->reward) ? -1 :
-			((a->reward > b->reward) ? 1 : 0);
-	return cmpres;
+static INLINE int workitem_cmp(const workitem_t *restrict a, const workitem_t *restrict b) {
+    int cmpres = strcmp(a->pattern, b->pattern);
+    if (unlikely(cmpres == 0)) {
+        return (a->reward < b->reward) ? -1 : ((a->reward > b->reward) ? 1 : 0);
+    }
+    return cmpres;
 }
 
 static workitem_t *
@@ -313,16 +320,17 @@ server_workitem_new(server_request_t *reqp,
 	if (pubkey == NULL)
 		return NULL;
 
-
-	wip = (workitem_t *) malloc(sizeof(*wip) +
-				    strlen(pfx) +
-				    strlen(comment) + 2);
+	size_t pfx_len = strlen(pfx);
+	size_t comment_len = strlen(comment);
+	wip = malloc(sizeof(*wip) + pfx_len + comment_len + 2);
 	memset(wip, 0, sizeof(*wip));
 	avl_item_init(&wip->avlent);
-	wip->pattern = (char *) (wip + 1);
-	strcpy((char *)wip->pattern, pfx);
-	wip->comment = wip->pattern + (strlen(wip->pattern) + 1);
-	strcpy((char *) wip->comment, comment);
+	wip->pattern = (char *)(wip + 1);
+	memcpy((char *)wip->pattern, pfx, pfx_len);
+	wip->pattern[pfx_len] = '\0';
+	wip->comment = wip->pattern + pfx_len + 1;
+	memcpy((char *)wip->comment, comment, comment_len);
+	wip->comment[comment_len] = '\0';
 	wip->pubkey = pubkey;
 	wip->addrtype = addrtype;
 	wip->difficulty = difficulty;
@@ -862,7 +870,7 @@ main(int argc, char **argv)
 			     "x:u:a:vqp:d:w:t:g:b:VD:Sh?i:m:")) != -1) {
 		switch (opt) {
 		case 'x':
-			strcpy(workurl, optarg);
+			snprintf(workurl, sizeof(workurl), "%s", optarg);
 			workurlFlag = 1;
 			break;
 		case 'u':

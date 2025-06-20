@@ -73,8 +73,8 @@ START_TEST(test_segwit_addr_encode)
     size_t n = sizeof(valid_address_tests) / sizeof(valid_address_tests[0]);
 
 
-    for (int i = 0; i < n; i++) {
-        char got[128] = {'\0'};
+    for (size_t i = 0; i < n; i++) {
+        char got[128];
 
         int ret = segwit_addr_encode(got,
                                      valid_address_tests[i].hrp,
@@ -84,10 +84,7 @@ START_TEST(test_segwit_addr_encode)
         int expect_ret = 1;
 
         ck_assert_int_eq(ret, expect_ret);
-        ck_assert_mem_eq(got,
-                         valid_address_tests[i].expect_output_address,
-                         strlen(valid_address_tests[i].expect_output_address));
+        ck_assert_str_eq(got, valid_address_tests[i].expect_output_address);
     }
 }
 END_TEST
-

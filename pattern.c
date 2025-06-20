@@ -18,8 +18,6 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <math.h>
-#include <assert.h>
 
 #include <pthread.h>
 
@@ -30,6 +28,16 @@
 #include <openssl/obj_mac.h>
 
 #include <pcre.h>
+
+#if defined(__GNUC__) || defined(__clang__)
+#  define INLINE static inline __attribute__((always_inline))
+#  define likely(x)   __builtin_expect(!!(x), 1)
+#  define unlikely(x) __builtin_expect(!!(x), 0)
+#else
+#  define INLINE static inline
+#  define likely(x)   (x)
+#  define unlikely(x) (x)
+#endif
 
 #include "ticker.h"
 #include "pattern.h"
@@ -764,9 +772,9 @@ vg_context_wait_for_completion(vg_context_t *vcp)
  *                                \/                        |
  *                         [ripemd160_hash]         [checksum (not set)]
  */
-static int
-get_prefix_ranges(int addrtype, const char *pfx, BIGNUM **result,
-		  BN_CTX *bnctx)
+static INLINE int
+get_prefix_ranges(int addrtype, const char *restrict pfx, BIGNUM *restrict *result,
+		  BN_CTX *restrict bnctx)
 {
 	int i, p, c;
 	int zero_prefix = 0;
@@ -847,7 +855,7 @@ get_prefix_ranges(int addrtype, const char *pfx, BIGNUM **result,
 
 	for (i = 0; i < p; i++) {
 		c = vg_b58_reverse_map[(int)pfx[i]];
-		if (c == -1) {
+		if (unlikely(c == -1)) {
 			fprintf(stderr,
 				"Invalid character '%c' in prefix '%s'\n",
 				pfx[i], pfx);

@@ -25,14 +25,29 @@
 
 #include "bech32.h"
 #include "segwit_addr.h"
+#if defined(__GNUC__) || defined(__clang__)
+#  define INLINE static inline __attribute__((always_inline))
+#  define likely(x)   __builtin_expect(!!(x), 1)
+#  define unlikely(x) __builtin_expect(!!(x), 0)
+#else
+#  define INLINE static inline
+#  define likely(x)   (x)
+#  define unlikely(x) (x)
+#endif
 
-int segwit_addr_encode(char *output, const char *hrp, int witver, const uint8_t *witprog, size_t witprog_len) {
+INLINE int segwit_addr_encode(
+    char *restrict output,
+    const char *restrict hrp,
+    int witver,
+    const uint8_t *restrict witprog,
+    size_t witprog_len
+) {
     uint8_t data[65];
     size_t datalen = 0;
     bech32_encoding enc = BECH32_ENCODING_BECH32;
-    if (witver > 16) return 0;
-    if (witver == 0 && witprog_len != 20 && witprog_len != 32) return 0;
-    if (witprog_len < 2 || witprog_len > 40) return 0;
+    if (unlikely(witver > 16)) return 0;
+    if (unlikely(witver == 0 && witprog_len != 20 && witprog_len != 32)) return 0;
+    if (unlikely(witprog_len < 2 || witprog_len > 40)) return 0;
     if (witver > 0) enc = BECH32_ENCODING_BECH32M;
     data[0] = witver;
     convert_bits(data + 1, &datalen, 5, witprog, witprog_len, 8, 1);
@@ -40,17 +55,24 @@ int segwit_addr_encode(char *output, const char *hrp, int witver, const uint8_t 
     return bech32_encode(output, hrp, data, datalen, enc);
 }
 
-int segwit_addr_decode(int* witver, uint8_t* witdata, size_t* witdata_len, const char* hrp, const char* addr) {
+INLINE int segwit_addr_decode(
+    int *restrict witver,
+    uint8_t *restrict witdata,
+    size_t *restrict witdata_len,
+    const char *restrict hrp,
+    const char *restrict addr
+) {
     uint8_t data[84];
     char hrp_actual[84];
     size_t data_len;
+    size_t hrplen = strlen(hrp);
     bech32_encoding enc = bech32_decode(hrp_actual, data, &data_len, addr);
-    if (enc == BECH32_ENCODING_NONE) return 0;
-    if (data_len == 0 || data_len > 65) return 0;
-    if (strncmp(hrp, hrp_actual, 84) != 0) return 0;
-    if (data[0] > 16) return 0;
-    if (data[0] == 0 && enc != BECH32_ENCODING_BECH32) return 0;
-    if (data[0] > 0 && enc != BECH32_ENCODING_BECH32M) return 0;
+    if (unlikely(enc == BECH32_ENCODING_NONE)) return 0;
+    if (unlikely(data_len == 0 || data_len > 65)) return 0;
+    if (unlikely(strncmp(hrp_actual, hrp, hrplen) != 0 || hrp_actual[hrplen] != '\0')) return 0;
+    if (unlikely(data[0] > 16)) return 0;
+    if (unlikely(data[0] == 0 && enc != BECH32_ENCODING_BECH32)) return 0;
+    if (unlikely(data[0] > 0 && enc != BECH32_ENCODING_BECH32M)) return 0;
     *witdata_len = 0;
     if (!convert_bits(witdata, witdata_len, 8, data + 1, data_len - 1, 5, 0)) return 0;
     if (*witdata_len < 2 || *witdata_len > 40) return 0;

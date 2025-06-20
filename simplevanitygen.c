@@ -12,6 +12,14 @@
 #include "bech32.h"
 #include "segwit_addr.h"
 
+#if defined(__GNUC__) || defined(__clang__)
+#  define likely(x)   __builtin_expect(!!(x), 1)
+#  define unlikely(x) __builtin_expect(!!(x), 0)
+#else
+#  define likely(x)   (x)
+#  define unlikely(x) (x)
+#endif
+
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 #include <openssl/core_names.h>
 
@@ -135,6 +143,13 @@ thread_loop_simplevanitygen(void *arg) {
 
     pattern_len = strlen(vc_simplevanitygen->pattern);
 
+    vg_context_simplevanitygen_t *ctx = vc_simplevanitygen;
+    const char *pattern = ctx->pattern;
+    size_t pat_len = pattern_len;
+    const char *hrp = ctx->vc_hrp;
+    const char *coin = ctx->vc_coin;
+    size_t pub_buf_capacity = pub_buf_len;
+
     check_thread_index:
     thread_index = get_thread_index(vc_simplevanitygen->vc_thread_num);
     if (thread_index == -1) {
@@ -150,7 +165,7 @@ thread_loop_simplevanitygen(void *arg) {
     while (!vc_simplevanitygen->vc_halt) {
         // Generate a key-pair
         // EVP_PKEY_keygen is slow!
-        if (EVP_PKEY_keygen(pctx, &pkey) <= 0) {
+        if (unlikely(EVP_PKEY_keygen(pctx, &pkey) <= 0)) {
             fprintf(stderr, "EVP_PKEY_keygen fail\n");
             return NULL;
         }
@@ -161,7 +176,7 @@ thread_loop_simplevanitygen(void *arg) {
         if (vc_simplevanitygen->vc_addrtype == ADDR_TYPE_ATOM) {
             // Get compressed public key from EVP_PKEY
             size_t output_len = 0;
-            get_public_key(pkey, pub_buf, pub_buf_len, POINT_CONVERSION_COMPRESSED, &output_len);
+            get_public_key(pkey, pub_buf, pub_buf_capacity, POINT_CONVERSION_COMPRESSED, &output_len);
 
             unsigned char hash1[32], hash2[20];
             SHA256(pub_buf, output_len, hash1);
@@ -172,7 +187,7 @@ thread_loop_simplevanitygen(void *arg) {
             // Convert 8-bit unsigned integers to 5-bit integers, see https://en.bitcoin.it/wiki/Bech32
             convert_bits(data, &datalen, 5, hash2, 20, 8, 1);
             // Do bech32 encoding
-            if (bech32_encode(address, "cosmos", data, datalen, BECH32_ENCODING_BECH32) != 1) {
+            if (unlikely(bech32_encode(address, "cosmos", data, datalen, BECH32_ENCODING_BECH32) != 1)) {
                 fprintf(stderr, "bech32_encode fail\n");
                 goto out;
             }
@@ -180,22 +195,25 @@ thread_loop_simplevanitygen(void *arg) {
         else if (vc_simplevanitygen->vc_format == VCF_P2WPKH) {
             // Get compressed public key from EVP_PKEY
             size_t output_len = 0;
-            get_public_key(pkey, pub_buf, pub_buf_len, POINT_CONVERSION_COMPRESSED, &output_len);
+            get_public_key(pkey, pub_buf, pub_buf_capacity, POINT_CONVERSION_COMPRESSED, &output_len);
 
             unsigned char hash1[32], hash2[20];
             SHA256(pub_buf, output_len, hash1);
             RIPEMD160(hash1, sizeof(hash1), hash2);
 
             // Compute p2wpkh address
-            segwit_addr_encode(address,
-                               vc_simplevanitygen->vc_hrp,
-                               0,
-                               hash2,
-                               20);
+            if (unlikely(segwit_addr_encode(address,
+                                   hrp,
+                                   0,
+                                   hash2,
+                                   20) != 1)) {
+                fprintf(stderr, "segwit_addr_encode fail\n");
+                goto out;
+            }
         } else if (vc_simplevanitygen->vc_format == VCF_P2TR) {
             // Get uncompressed public key from EVP_PKEY
             size_t output_len = 0;
-            get_public_key(pkey, pub_buf, pub_buf_len, POINT_CONVERSION_UNCOMPRESSED, &output_len);
+            get_public_key(pkey, pub_buf, pub_buf_capacity, POINT_CONVERSION_UNCOMPRESSED, &output_len);
 
             if (pub_buf[64] % 2 != 0) {
                 // Y is odd
@@ -252,59 +270,63 @@ thread_loop_simplevanitygen(void *arg) {
                 BN_free(t);
 
                 // Compute p2tr address
-                segwit_addr_encode(address,
-                                   vc_simplevanitygen->vc_hrp,
+                if (unlikely(segwit_addr_encode(address,
+                                   hrp,
                                    1,
                                    pub_buf + 1, // Skip first byte (0x02 or 0x03)
-                                   32); // Only get X party
+                                   32) != 1)) {
+                    fprintf(stderr, "segwit_addr_encode fail\n");
+                    goto out;
+                }
             }
         }
 
         // Check address if match pattern
-        if (vc_simplevanitygen->match_location == 0) { // any
-            if (strstr((const char *) address, vc_simplevanitygen->pattern) != NULL) {
+        if (ctx->match_location == 0) { // any
+            if (strstr((const char *) address, pattern) != NULL) {
                 find_it = 1;
             }
-        } else if (vc_simplevanitygen->match_location == 1) { // begin
-            if (strncmp(vc_simplevanitygen->pattern, (const char *) address, pattern_len) == 0) {
+        } else if (ctx->match_location == 1) { // begin
+            if (strncmp(pattern, (const char *) address, pat_len) == 0) {
                 find_it = 1;
             }
-        } else if (vc_simplevanitygen->match_location == 2) { // end
-            if (strncmp(vc_simplevanitygen->pattern, ((const char *) address) + strlen(address) - pattern_len,
-                        pattern_len) == 0) {
+        } else if (ctx->match_location == 2) { // end
+            size_t addr_len = strlen(address);
+            if (strncmp(pattern, ((const char *) address) + addr_len - pat_len,
+                        pat_len) == 0) {
                 find_it = 1;
             }
         }
         if (find_it == 1) {
             pthread_mutex_lock(&mtx);
 
-            if (vc_simplevanitygen->vc_found_num >= vc_simplevanitygen->vc_numpairs) {
-                vc_simplevanitygen->vc_halt = 1;
+            if (ctx->vc_found_num >= ctx->vc_numpairs) {
+                ctx->vc_halt = 1;
                 pthread_mutex_unlock(&mtx);
                 goto out;
             }
 
-            vc_simplevanitygen->vc_found_num++;
+            ctx->vc_found_num++;
 
-            printf("\r%s Address: %s\n", vc_simplevanitygen->vc_coin, address);
+            printf("\r%s Address: %s\n", coin, address);
 
             // get private key from EVP_PKEY
             size_t output_len = 0;
-            get_private_key(pkey, (unsigned char *) &priv_buf, pub_buf_len, &output_len);
+            get_private_key(pkey, (unsigned char *) &priv_buf, pub_buf_capacity, &output_len);
 
-            fprintf(stdout, "%s Privkey (hex): ", vc_simplevanitygen->vc_coin);
+            fprintf(stdout, "%s Privkey (hex): ", coin);
             dumphex(priv_buf, output_len);
 
-            vc_simplevanitygen->vc_halt = 1;
+            ctx->vc_halt = 1;
 
-            if (vc_simplevanitygen->vc_result_file) {
-                FILE *fp = fopen(vc_simplevanitygen->vc_result_file, "a");
+            if (ctx->vc_result_file) {
+                FILE *fp = fopen(ctx->vc_result_file, "a");
                 if (!fp) {
                     fprintf(stderr, "ERROR: could not open result file: %s\n", strerror(errno));
                 } else {
-                    fprintf(fp, "Pattern: %s\n", vc_simplevanitygen->pattern);
-                    fprintf(fp, "%s Address: %s\n", vc_simplevanitygen->vc_coin, address);
-                    fprintf(fp, "%s Privkey (hex): ", vc_simplevanitygen->vc_coin);
+                    fprintf(fp, "Pattern: %s\n", pattern);
+                    fprintf(fp, "%s Address: %s\n", coin, address);
+                    fprintf(fp, "%s Privkey (hex): ", coin);
                     fdumphex(fp, priv_buf, output_len);
                     fclose(fp);
                 }
@@ -314,15 +336,18 @@ thread_loop_simplevanitygen(void *arg) {
         }
 
         if (output_timeout > 1500) {
-            output_check_info(vc_simplevanitygen);
+            output_check_info(ctx);
             output_timeout = 0;
         }
+
+        EVP_PKEY_free(pkey);
+        pkey = NULL;
     }
 
     out:
-    if (vc_simplevanitygen->vc_verbose > 1) {
+    if (ctx->vc_verbose > 1) {
         fprintf(stderr, "thread %d check %lld keys\n", thread_index,
-                vc_simplevanitygen->vc_check_count[thread_index]);
+                ctx->vc_check_count[thread_index]);
     }
     EVP_PKEY_CTX_free(pctx);
 

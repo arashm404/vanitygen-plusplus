@@ -1,4 +1,4 @@
-#include "pattern.c" // get_prefix_ranges is a static function in pattern.c, can't introduce it by linking pattern.o
+#include "pattern.h" // get_prefix_ranges is a static function in pattern.c, can't introduce it by linking pattern.o
 char ticker[10];  // Fix link issue: Undefined symbols for architecture x86_64: "_ticker"
 
 START_TEST(test_get_prefix_ranges)
@@ -22,23 +22,27 @@ START_TEST(test_get_prefix_ranges)
     };
 
     size_t n = sizeof(tests) / sizeof(tests[0]);
+    char *got;
+    BN_CTX *bnctx = BN_CTX_new();
 
     for (int i = 0; i < n; i++) {
-        char *got;
         BIGNUM *ranges[4];
-        BN_CTX *bnctx = BN_CTX_new();
         
         int rv = get_prefix_ranges(tests[i].addrtype, tests[i].pattern, ranges, bnctx);
         ck_assert_int_eq(0, rv);
 
-        
         got = BN_bn2hex(ranges[0]);
-        ck_assert_int_eq(strlen(got), strlen(tests[i].result_0));
+        ck_assert_str_eq(got, tests[i].result_0);
         OPENSSL_free(got);
 
         got = BN_bn2hex(ranges[1]);
-        ck_assert_int_eq(strlen(got), strlen(tests[i].result_1));
+        ck_assert_str_eq(got, tests[i].result_1);
         OPENSSL_free(got);
+
+        for (int j = 0; j < 4; j++) {
+            BN_free(ranges[j]);
+        }
     }
+    BN_CTX_free(bnctx);
 }
 END_TEST

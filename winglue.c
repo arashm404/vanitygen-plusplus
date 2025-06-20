@@ -35,17 +35,18 @@ count_processors(void)
 	if (!glpi)
 		return -1;
 
-	while (1) {
-		ret = glpi(buffer, &size);
-		if (ret)
-			break;
-		if (buffer)
-			free(buffer);
-		if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
-			return -1;
-		buffer = (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION) malloc(size);
-		if (!buffer)
-			return -1;
+	ret = glpi(NULL, &size);
+	if (ret || size == 0)
+		return -1;
+
+	buffer = (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION) malloc(size);
+	if (!buffer)
+		return -1;
+
+	ret = glpi(buffer, &size);
+	if (!ret) {
+		free(buffer);
+		return -1;
 	}
 
 	for (ptr = buffer;
@@ -99,18 +100,18 @@ gettimeofday(struct timeval *tv, struct timezone *tz)
 }
 
 void
-timeradd(struct timeval *a, struct timeval *b, struct timeval *result)
+timeradd(const struct timeval *a, const struct timeval *b, struct timeval *result)
 {
 	result->tv_sec = a->tv_sec + b->tv_sec;
 	result->tv_usec = a->tv_usec + b->tv_usec;
-	if (result->tv_usec > 10000000) {
+	if (result->tv_usec > 1000000) {
 		result->tv_sec++;
 		result->tv_usec -= 1000000;
 	}
 }
 
 void
-timersub(struct timeval *a, struct timeval *b, struct timeval *result)
+timersub(const struct timeval *a, const struct timeval *b, struct timeval *result)
 {
 	result->tv_sec = a->tv_sec - b->tv_sec;
 	result->tv_usec = a->tv_usec - b->tv_usec;

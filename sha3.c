@@ -12,6 +12,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(__GNUC__) || defined(__clang__)
+#  define INLINE static inline __attribute__((always_inline))
+#  define likely(x)   __builtin_expect(!!(x), 1)
+#  define unlikely(x) __builtin_expect(!!(x), 0)
+#else
+#  define INLINE static inline
+#  define likely(x)   (x)
+#  define unlikely(x) (x)
+#endif
 
 /******** The Keccak-f[1600] permutation ********/
 
@@ -55,9 +64,7 @@ static const uint64_t RC[24] = {1ULL,
   REPEAT5(e; v += s;)
 
 /*** Keccak-f[1600] ***/
-static inline
-void keccakf(void *state) {
-  uint64_t *a = (uint64_t *)state;
+static INLINE void keccakf(uint64_t *restrict a) {
   uint64_t b[5] = {0};
   uint64_t t = 0;
   uint8_t x, y;
@@ -90,13 +97,13 @@ void keccakf(void *state) {
   } while (0)
 #define FOR(i, ST, L, S) _(size_t i; for (i = 0; i < L; i += ST) { S; })
 #define mkapply_ds(NAME, S)                                                    \
-  static inline void NAME(                      \
-      uint8_t *dst, const uint8_t *src, size_t len) {                          \
+  static INLINE void NAME(                      \
+      uint8_t *restrict dst, const uint8_t *restrict src, size_t len) {        \
     FOR(i, 1, len, S);                                                         \
   }
 #define mkapply_sd(NAME, S)                                                    \
-  static inline void NAME(                      \
-      const uint8_t *src, uint8_t *dst, size_t len) {                          \
+  static INLINE void NAME(                      \
+      const uint8_t *restrict src, uint8_t *restrict dst, size_t len) {        \
     FOR(i, 1, len, S);                                                         \
   }
 
@@ -116,13 +123,15 @@ mkapply_sd(setout, dst[i] = src[i]) // setout
   }
 
 /** The sponge-based hash construction. **/
-static inline
-int hash(uint8_t *out, size_t outlen, const uint8_t *in, size_t inlen,
-         size_t rate, uint8_t delim) {
-  if ((out == NULL) || ((in == NULL) && inlen != 0) || (rate >= Plen)) {
+static INLINE int hash(
+    uint8_t *restrict out, size_t outlen,
+    const uint8_t *restrict in, size_t inlen,
+    size_t rate, uint8_t delim
+) {
+  if (unlikely(out == NULL || (in == NULL && inlen != 0) || rate >= Plen)) {
     return -1;
   }
-  uint8_t a[Plen] = {0};
+  uint8_t a[Plen] __attribute__((aligned(64))) = {0};
   // Absorb input.
   foldP(in, inlen, xorin);
   // Xor in the DS and pad frame.
@@ -140,8 +149,8 @@ int hash(uint8_t *out, size_t outlen, const uint8_t *in, size_t inlen,
 }
 
 #define defsha3(bits)                                                          \
-  int sha3_##bits(uint8_t *out, size_t outlen, const uint8_t *in,              \
-                  size_t inlen) {                                              \
+  INLINE int sha3_##bits(uint8_t *restrict out, size_t outlen,                 \
+                  const uint8_t *restrict in, size_t inlen) {                  \
     if (outlen > (bits / 8)) {                                                 \
       return -1;                                                               \
     }                                                                          \

@@ -5,19 +5,26 @@
 
 #define FROM_HEX_MAXLEN 512
 
+static inline int hexval(unsigned char c) {
+    // Convert ASCII hex digit to 0–15, returns 0 for invalid
+    c |= 32; // map 'A'-'F' to 'a'-'f'
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    return 0;
+}
+
 const uint8_t *from_hex(const char *str) {
-	static uint8_t buf[FROM_HEX_MAXLEN];
-	size_t len = strlen(str) / 2;
-	if (len > FROM_HEX_MAXLEN) len = FROM_HEX_MAXLEN;
-	for (size_t i = 0; i < len; i++) {
-		uint8_t c = 0;
-		if (str[i * 2] >= '0' && str[i*2] <= '9') c += (str[i * 2] - '0') << 4;
-		if ((str[i * 2] & ~0x20) >= 'A' && (str[i*2] & ~0x20) <= 'F') c += (10 + (str[i * 2] & ~0x20) - 'A') << 4;
-		if (str[i * 2 + 1] >= '0' && str[i * 2 + 1] <= '9') c += (str[i * 2 + 1] - '0');
-		if ((str[i * 2 + 1] & ~0x20) >= 'A' && (str[i * 2 + 1] & ~0x20) <= 'F') c += (10 + (str[i * 2 + 1] & ~0x20) - 'A');
-		buf[i] = c;
-	}
-	return buf;
+    static uint8_t buf[FROM_HEX_MAXLEN];
+    const char *p = str;
+    uint8_t *q = buf;
+    size_t len = strlen(str) >> 1;
+    if (len > FROM_HEX_MAXLEN) len = FROM_HEX_MAXLEN;
+    for (size_t i = 0; i < len; i++) {
+        int hi = hexval((unsigned char)*p++);
+        int lo = hexval((unsigned char)*p++);
+        *q++ = (hi << 4) | lo;
+    }
+    return buf;
 }
 
 

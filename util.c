@@ -23,8 +23,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
-#include <math.h>
+#if defined(__GNUC__) || defined(__clang__)
+#  define INLINE static inline __attribute__((always_inline))
+#  define likely(x)   __builtin_expect(!!(x), 1)
+#  define unlikely(x) __builtin_expect(!!(x), 0)
+#else
+#  define INLINE static inline
+#  define likely(x)   (x)
+#  define unlikely(x) (x)
+#endif
 #include <ctype.h>
 
 #include <openssl/bn.h>
@@ -1369,8 +1376,8 @@ static const char hexdig[] = "0123456789abcdef";
 // An example:
 // input: hex[4] = {0x31, 0x32, 0x61, 0x62}
 // output: bin[2] = {0x12, 0xab}
-int
-hex_dec(void *bin, size_t *binszp, const char *hex, size_t hexsz)
+INLINE int hex_dec(void *restrict bin, size_t *restrict binszp,
+                   const char *restrict hex, size_t hexsz)
 {
 	size_t binsz = *binszp;
 	const unsigned char *hexu = (const unsigned char *)hex;
@@ -1378,12 +1385,12 @@ hex_dec(void *bin, size_t *binszp, const char *hex, size_t hexsz)
 	size_t i;
 
 	if (!hexsz) hexsz = strlen((const char *)hex);
-	if (hexsz & 1) return -1;
-	if (*hexu == '0' && (hexu[1] | 0x20) == 'x') {
+	if (unlikely(hexsz & 1)) return -1;
+	if (unlikely(*hexu == '0' && (hexu[1] | 0x20) == 'x')) {
 		hexu += 2;
 		hexsz -= 2;
 	}
-	if (hexsz == 0 || binsz < hexsz/2) return -1;
+	if (unlikely(hexsz == 0 || binsz < hexsz/2)) return -1;
 	binsz = hexsz/2;
 	for(i=0;i<binsz;i++,binu++) {
 		if (!isxdigit(*hexu)) return -1;
@@ -1406,12 +1413,12 @@ hex_dec(void *bin, size_t *binszp, const char *hex, size_t hexsz)
 // An example:
 // input: data[2] = {0x12, 0xab}
 // output: hex[4] = {0x31, 0x32, 0x61, 0x62}
-int
-hex_enc(char *hex, size_t *hexszp, const void *data, size_t binsz)
+INLINE int hex_enc(char *restrict hex, size_t *restrict hexszp,
+                   const void *restrict data, size_t binsz)
 {
 	const uint8_t *bin = (const uint8_t *)data;
 	size_t i, len;
-	if (*hexszp < binsz*2) { return -1; }
+	if (unlikely(*hexszp < binsz*2)) { return -1; }
 	len = 0;
 	for(i=0;i<binsz;i++,bin++) {
 		*hex++ = hexdig[*bin >> 4];

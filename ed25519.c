@@ -78,8 +78,9 @@ thread_loop_ed25519(void *arg)
     xlm_addr_out[56] = '\0';
     int find_it = 0;
     size_t pattern_len;
-    size_t buf_len = 32;
     int thread_index;
+
+    size_t buf_len = 32;
 
     EVP_PKEY *pkey = NULL;
     EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_ED25519, NULL);
@@ -92,6 +93,9 @@ thread_loop_ed25519(void *arg)
     vg_context_ed25519_t *vc_ed25519 = (vg_context_ed25519_t *) arg;
 
     pattern_len = strlen(vc_ed25519->pattern);
+    int match_loc = vc_ed25519->match_location;
+    const char *pattern = vc_ed25519->pattern;
+    size_t pat_len = pattern_len;
 
 check_thread_index:
     thread_index = get_thread_index(vc_ed25519->vc_thread_num);
@@ -108,6 +112,11 @@ check_thread_index:
         // generate a key-pair
         EVP_PKEY_keygen(pctx, &pkey);
 
+        // free previous key if any
+        if (pkey && pkey != NULL && pkey != (EVP_PKEY*)1) { /* only first iteration */
+            EVP_PKEY_free(pkey);
+        }
+
         vc_ed25519->vc_check_count[thread_index]++;
         output_timeout++;
 
@@ -122,16 +131,16 @@ check_thread_index:
             strkey_encode(6 << 3, pub_buf, 32, xlm_addr_out);
 
             // Check address if match pattern
-            if (vc_ed25519->match_location == 0) { // any
-                if (strstr((const char*)xlm_addr_out, vc_ed25519->pattern) != NULL) {
+            if (match_loc == 0) { // any
+                if (strstr((const char*)xlm_addr_out, pattern) != NULL) {
                     find_it = 1;
                 }
-            } else if (vc_ed25519->match_location == 1) { // begin
-                if (strncmp(vc_ed25519->pattern, (const char*)xlm_addr_out, pattern_len) == 0) {
+            } else if (match_loc == 1) { // begin
+                if (strncmp(pattern, (const char*)xlm_addr_out, pat_len) == 0) {
                     find_it = 1;
                 }
-            } else if (vc_ed25519->match_location == 2) { // end
-                if (strncmp(vc_ed25519->pattern, ((const char*)xlm_addr_out) + 56 - pattern_len, pattern_len) == 0) {
+            } else if (match_loc == 2) { // end
+                if (strncmp(pattern, ((const char*)xlm_addr_out) + 56 - pat_len, pat_len) == 0) {
                     find_it = 1;
                 }
             }
@@ -167,7 +176,7 @@ check_thread_index:
                     if (!fp) {
                         fprintf(stderr, "ERROR: could not open result file: %s\n", strerror(errno));
                     } else {
-                        fprintf(fp, "Pattern: %s\n", vc_ed25519->pattern);
+                        fprintf(fp, "Pattern: %s\n", pattern);
                         fprintf(fp, "XLM Address: %.56s\n", xlm_addr_out);
                         fprintf(fp, "XLM Privkey: %.56s\n", xlm_private_out);
                         fclose(fp);
@@ -182,6 +191,8 @@ check_thread_index:
             output_check_info(vc_ed25519);
             output_timeout = 0;
         }
+        EVP_PKEY_free(pkey);
+        pkey = NULL;
     }
 
 out:

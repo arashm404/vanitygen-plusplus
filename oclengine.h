@@ -16,24 +16,26 @@
  * along with Vanitygen.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#if !defined (__VG_OCLENGINE_H__)
-#define __VG_OCLENGINE_H__
+#pragma once
 
 #include "pattern.h"
+#include <stddef.h>
 
 typedef struct _vg_ocl_context_s vg_ocl_context_t;
 
 extern vg_ocl_context_t *vg_ocl_context_new(
-	vg_context_t *vcp, int platformidx, int deviceidx,
+	vg_context_t *restrict vcp, int platformidx, int deviceidx,
 	int safe_mode, int verify,
 	int worksize, int nthreads, int nrows, int ncols,
-	int invsize);
-extern void vg_ocl_context_free(vg_ocl_context_t *vocp);
+	int invsize
+) __attribute__((nonnull(1))) __attribute__((warn_unused_result));
+
+extern void vg_ocl_context_free(vg_ocl_context_t *restrict vocp)
+	__attribute__((nonnull(1)));
 
 extern vg_ocl_context_t *vg_ocl_context_new_from_devstr(
-	vg_context_t *vcp, const char *devstr, int safemode, int verify)
-;
+	vg_context_t *restrict vcp, const char *restrict devstr,
+	int safemode, int verify
+) __attribute__((nonnull(1,2))) __attribute__((warn_unused_result));
 
 extern void vg_ocl_enumerate_devices(void);
-
-#endif /* !defined (__VG_OCLENGINE_H__) */

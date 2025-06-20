@@ -19,7 +19,23 @@
 #if !defined (__VG_AVL_H__)
 #define __VG_AVL_H__
 
+
 #include <assert.h>
+
+#ifndef INLINE
+#if defined(__GNUC__) || defined(__clang__)
+#define INLINE static inline __attribute__((always_inline))
+#else
+#define INLINE static __inline
+#endif
+#endif
+
+#ifndef likely
+#define likely(x) __builtin_expect(!!(x), 1)
+#endif
+#ifndef unlikely
+#define unlikely(x) __builtin_expect(!!(x), 0)
+#endif
 
 /*
  * AVL tree implementation
@@ -72,8 +88,8 @@ avl_item_init(avl_item_t *itemp)
 
 
 
-static INLINE void
-_avl_rotate_ll(avl_root_t *rootp, avl_item_t *itemp)
+INLINE void
+_avl_rotate_ll(avl_root_t *restrict rootp, avl_item_t *restrict itemp)
 {
 	avl_item_t *tmp;
 	tmp = itemp->ai_left;
@@ -96,8 +112,8 @@ _avl_rotate_ll(avl_root_t *rootp, avl_item_t *itemp)
 	itemp->ai_up = tmp;
 }
 
-static INLINE void
-_avl_rotate_lr(avl_root_t *rootp, avl_item_t *itemp)
+INLINE void
+_avl_rotate_lr(avl_root_t *restrict rootp, avl_item_t *restrict itemp)
 {
 	avl_item_t *rcp, *rlcp;
 	rcp = itemp->ai_left;
@@ -125,8 +141,8 @@ _avl_rotate_lr(avl_root_t *rootp, avl_item_t *itemp)
 	itemp->ai_up = rlcp;
 }
 
-static INLINE void
-_avl_rotate_rr(avl_root_t *rootp, avl_item_t *itemp)
+INLINE void
+_avl_rotate_rr(avl_root_t *restrict rootp, avl_item_t *restrict itemp)
 {
 	avl_item_t *tmp;
 	tmp = itemp->ai_right;
@@ -149,8 +165,8 @@ _avl_rotate_rr(avl_root_t *rootp, avl_item_t *itemp)
 	itemp->ai_up = tmp;
 }
 
-static INLINE void
-_avl_rotate_rl(avl_root_t *rootp, avl_item_t *itemp)
+INLINE void
+_avl_rotate_rl(avl_root_t *restrict rootp, avl_item_t *restrict itemp)
 {
 	avl_item_t *rcp, *rlcp;
 	rcp = itemp->ai_right;

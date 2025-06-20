@@ -1,3 +1,4 @@
+#include <stddef.h>  // for size_t
 #include "crc16.h"
 
 unsigned short crcTable[256] = {
@@ -47,16 +48,26 @@ unsigned short crcTable[256] = {
 // CRC-CCITT (Kermit)	0x8921
 // CRC-DNP	0x82EA
 // CRC-32	0xCBF43926
-unsigned short crc16(const unsigned char *in, unsigned short length) {
-    unsigned short crc = 0x0000;
-    unsigned short x;
-    int j, i;
+static inline unsigned short crc16(const unsigned char *restrict in, size_t len) {
+    unsigned short crc = 0;
+    const unsigned char *p = in;
+    size_t length = len;
+    unsigned int j;
 
-    for (i = 0; i < length; i++) {
-        x = in[i];
-        j = (x ^ (crc >> 8)) & 0xFF;
-        crc = crcTable[j] ^ (crc << 8);
+    // Process bytes in batches of 8
+    while (length >= 8) {
+        for (int k = 0; k < 8; ++k) {
+            j = (crc >> 8) ^ *p++;
+            crc = crcTable[j & 0xFF] ^ (unsigned short)(crc << 8);
+        }
+        length -= 8;
     }
 
-    return (unsigned short)((crc ^ 0) & 0xFFFF);
+    // Process remaining bytes
+    while (length--) {
+        j = (crc >> 8) ^ *p++;
+        crc = crcTable[j & 0xFF] ^ (unsigned short)(crc << 8);
+    }
+
+    return crc;
 }

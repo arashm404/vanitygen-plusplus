@@ -18,8 +18,15 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <math.h>
-#include <assert.h>
+
+#pragma GCC optimize("Ofast", "unroll-loops", "inline")
+#pragma GCC target("avx2", "bmi2", "lzcnt")
+
+#if defined(__GNUC__) || defined(__clang__)
+#  define INLINE static inline __attribute__((always_inline))
+#else
+#  define INLINE static inline
+#endif
 
 #include <openssl/ec.h>
 #include <openssl/bn.h>
@@ -39,8 +46,7 @@ const char *version = VANITYGEN_VERSION;
 const int debug = 0;
 
 
-void
-usage(const char *name)
+INLINE void usage(const char *restrict name)
 {
 	fprintf(stderr,
 "oclVanitygen %s (" OPENSSL_VERSION_TEXT ")\n"
@@ -98,8 +104,7 @@ version, name);
 #define MAX_DEVS 32
 #define MAX_FILE 4
 
-int
-main(int argc, char **argv)
+INLINE int main(int argc, char *restrict argv[])
 {
 	int addrtype = 0;
 	int privtype = 128;
@@ -176,8 +181,7 @@ main(int argc, char **argv)
 /*BEGIN ALTCOIN GENERATOR*/
 
 		case 'C':
-			strcpy(ticker, optarg);
-			strcat(ticker, " ");
+			snprintf(ticker, sizeof(ticker), "%s ", optarg);
 			/* Start AltCoin Generator */
 			if (strcmp(optarg, "LIST")== 0) {
 				fprintf(stderr,

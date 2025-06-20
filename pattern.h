@@ -16,8 +16,7 @@
  * along with Vanitygen.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#if !defined (__VG_PATTERN_H__)
-#define __VG_PATTERN_H__
+#pragma once
 
 #include <openssl/bn.h>
 #include <openssl/ec.h>
@@ -33,6 +32,19 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <unistd.h>
+
+#include <stddef.h>    // for size_t
+#include <stdatomic.h> // for _Atomic
+
+#if defined(__GNUC__) || defined(__clang__)
+#  define INLINE static inline __attribute__((always_inline))
+#  define likely(x)   __builtin_expect(!!(x), 1)
+#  define unlikely(x) __builtin_expect(!!(x), 0)
+#else
+#  define INLINE static inline
+#  define likely(x)   (x)
+#  define unlikely(x) (x)
+#endif
 #endif
 
 #define VANITYGEN_VERSION "PLUS PLUS v2.01"
@@ -54,16 +66,16 @@ typedef struct _vg_exec_context_s vg_exec_context_t;
 typedef void *(*vg_exec_context_threadfunc_t)(vg_exec_context_t *);
 
 /* Context of one pattern-matching unit within the process */
-struct _vg_exec_context_s {
+struct _vg_exec_context_s _Alignas(64) {
 	vg_context_t			*vxc_vc;
-	BN_CTX				*vxc_bnctx;
+	_Atomic BN_CTX			*vxc_bnctx;
 	EC_KEY				*vxc_key;
 	int				vxc_delta;
 	unsigned char			vxc_binres[28];
-	BIGNUM				*vxc_bntarg;
-	BIGNUM				*vxc_bnbase;
-	BIGNUM				*vxc_bntmp;
-	BIGNUM				*vxc_bntmp2;
+	BIGNUM *restrict			vxc_bntarg;
+	BIGNUM *restrict			vxc_bnbase;
+	BIGNUM *restrict			vxc_bntmp;
+	BIGNUM *restrict			vxc_bntmp2;
 
 	vg_exec_context_threadfunc_t	vxc_threadfunc;
 	pthread_t			vxc_pthread;
@@ -146,17 +158,17 @@ struct _vg_context_s {
 
 
 /* Base context methods */
-extern void vg_context_free(vg_context_t *vcp);
-extern int vg_context_add_patterns(vg_context_t *vcp,
-				   const char ** const patterns, int npatterns);
+extern void vg_context_free(vg_context_t *restrict vcp) __attribute__((nonnull(1)));
+extern int vg_context_add_patterns(vg_context_t *restrict vcp,
+				   const char *const *restrict patterns, size_t npatterns) __attribute__((nonnull(1,2))) __attribute__((warn_unused_result));
 extern void vg_context_clear_all_patterns(vg_context_t *vcp);
 extern int vg_context_start_threads(vg_context_t *vcp);
 extern void vg_context_stop_threads(vg_context_t *vcp);
 extern void vg_context_wait_for_completion(vg_context_t *vcp);
 
 /* Prefix context methods */
-extern vg_context_t *vg_prefix_context_new(int addrtype, int privtype,
-					   int caseinsensitive);
+extern vg_context_t *restrict vg_prefix_context_new(int addrtype, int privtype,
+					   int caseinsensitive) __attribute__((warn_unused_result));
 extern void vg_prefix_context_set_case_insensitive(vg_context_t *vcp,
 						   int caseinsensitive);
 extern int vg_prefix_context_get_case_insensitive(vg_context_t *vcp);
@@ -190,6 +202,3 @@ extern EC_KEY *vg_exec_context_new_key(void);
 extern void vg_exec_context_downgrade_lock(vg_exec_context_t *vxcp);
 extern int vg_exec_context_upgrade_lock(vg_exec_context_t *vxcp);
 extern void vg_exec_context_yield(vg_exec_context_t *vxcp);
-
-
-#endif /* !defined (__VG_PATTERN_H__) */

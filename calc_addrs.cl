@@ -1187,8 +1187,7 @@ ec_add_grid(__global bn_word *points_out, __global bn_word *z_heap,
 	ry = col_in[i+1];
 
 	cell = get_global_id(0);
-	start = ((((2 * cell) / ACCESS_STRIDE) * ACCESS_BUNDLE) +
-		 (cell % (ACCESS_STRIDE/2)));
+	start = (((cell >> 6) << 10) + (cell & 63));
 
 #define ec_add_grid_inner_1(i) \
 	x1.d[i] = row_in[start + (i*ACCESS_STRIDE)];
@@ -1204,8 +1203,7 @@ ec_add_grid(__global bn_word *points_out, __global bn_word *z_heap,
 	bn_mod_sub(&z, &x1, &rx);
 
 	cell += (get_global_id(1) * get_global_size(0));
-	start = (((cell / ACCESS_STRIDE) * ACCESS_BUNDLE) +
-		 (cell % ACCESS_STRIDE));
+	start = (((cell >> 7) << 10) + (cell & 127));
 
 #define ec_add_grid_inner_3(i) \
 	z_heap[start + (i*ACCESS_STRIDE)] = z.d[i];
@@ -1225,8 +1223,7 @@ ec_add_grid(__global bn_word *points_out, __global bn_word *z_heap,
 	 * various GPUs, by giving it a nice contiguous patch to write
 	 * per warp/wavefront.
 	 */
-	start = ((((2 * cell) / ACCESS_STRIDE) * ACCESS_BUNDLE) +
-		 (cell % (ACCESS_STRIDE/2)));
+	start = (((cell >> 6) << 10) + (cell & 63));
 
 #define ec_add_grid_inner_4(i) \
 	points_out[start + (i*ACCESS_STRIDE)] = y1.d[i];

@@ -1,14 +1,17 @@
 with import <nixpkgs> {};
 # fastStdenv.mkDerivation { # for faster running times (8-12%) BUT... nondeterministic builds :(
-stdenv.mkDerivation {
+fastStdenv.mkDerivation {
   name = "vanitygen++";
   src = ./.;
   
-  enableParallelBuilding = true;
-
   nativeBuildInputs = [ pkg-config ];
 
   buildInputs = [ gcc pcre openssl opencl-clhpp ocl-icd curl curlpp ];
+
+  makeFlags = [ "-j${toString stdenv.jobs}" ];
+  NIX_CFLAGS_COMPILE = [ "-O3" "-march=native" "-mtune=native" ];
+
+  doCheck = false;
 
   buildPhase = ''
     make all

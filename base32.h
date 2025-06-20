@@ -32,7 +32,7 @@
  * data into base32. This is a macro to allow users to define buffer size at
  * compilation time.
  */
-#define BASE32_LEN(len)  (((len)/5)*8 + ((len) % 5 ? 8 : 0))
+#define BASE32_LEN(len)  ((((len) + 4) / 5) * 8)
 
 /**
  * Returns the length of the output buffer required to decode a base32 string
@@ -40,7 +40,7 @@
  * definition of a base32 string. This is a macro to allow users to define
  * buffer size at compilation time.
  */
-#define UNBASE32_LEN(len)  (((len)/8)*5)
+#define UNBASE32_LEN(len)  ((((len) + 7) / 8) * 5)
 
 /**
  * Encode the data pointed to by plain into base32 and store the
@@ -50,7 +50,7 @@
  * contain characters from the [A-Z2-7=] set. The "len" arguments
  * define how many bytes will be read from the "plain" buffer.
  **/
-void base32_encode(const unsigned char *plain, size_t len, unsigned char *coded);
+void base32_encode(const unsigned char *restrict plain, size_t len, unsigned char *restrict coded);
 
 /**
  * Decode the null terminated string pointed to by coded and write
@@ -61,6 +61,6 @@ void base32_encode(const unsigned char *plain, size_t len, unsigned char *coded)
  * expected due to padding. If an invalid base32 character is found
  * in the coded string, decoding will stop at that point.
  **/
-size_t base32_decode(const unsigned char *coded, unsigned char *plain);
+size_t base32_decode(const unsigned char *restrict coded, unsigned char *restrict plain);
 
 #endif

@@ -43,12 +43,12 @@ typedef enum {
  *  Returns 1 if successful.
  */
 int bech32_encode(
-    char *output,
-    const char *hrp,
-    const uint8_t *data,
+    char *restrict output,
+    const char *restrict hrp,
+    const uint8_t *restrict data,
     size_t data_len,
     bech32_encoding enc
-);
+) __attribute__((nonnull (1,2,3))) __attribute__((warn_unused_result));
 
 /** Decode a Bech32 or Bech32m string
  *
@@ -64,12 +64,12 @@ int bech32_encode(
  *  decoding failed.
  */
 bech32_encoding bech32_decode(
-    char *hrp,
-    uint8_t *data,
-    size_t *data_len,
-    const char *input
-);
+    char *restrict hrp,
+    uint8_t *restrict data,
+    size_t *restrict data_len,
+    const char *restrict input
+) __attribute__((nonnull (1,2,3,4))) __attribute__((warn_unused_result));
 
-int convert_bits(uint8_t* out, size_t* outlen, int outbits, const uint8_t* in, size_t inlen, int inbits, int pad);
+int convert_bits(uint8_t *restrict out, size_t *restrict outlen, int outbits, const uint8_t *restrict in, size_t inlen, int inbits, int pad) __attribute__((nonnull (1,2,4))) __attribute__((warn_unused_result));
 
 #endif

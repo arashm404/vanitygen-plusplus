@@ -28,6 +28,8 @@
 #include <openssl/ec.h>
 #include <openssl/bn.h>
 #include <openssl/rand.h>
+#include <secp256k1.h>
+static secp256k1_context *secp_ctx = NULL;
 
 #include "pattern.h"
 #include "util.h"
@@ -51,235 +53,67 @@ const char *version = VANITYGEN_VERSION;
 void *
 vg_thread_loop(void *arg)
 {
-	unsigned char hash_buf[128];
-	unsigned char *eckey_buf;
-	unsigned char hash1[32];
+    unsigned char hash1[32];
+    int output_interval;
+    vg_context_t *vcp = (vg_context_t *) arg;
+    vg_test_func_t test_func = vcp->vc_test;
+    vg_exec_context_t ctx;
+    vg_exec_context_t *vxcp;
+    struct timeval tvstart;
+    memset(&ctx, 0, sizeof(ctx));
+    vxcp = &ctx;
+    vg_exec_context_init(vcp, &ctx);
 
-	int i, c, len, output_interval;
-	int hash_len;
+    // Input data for base58check: [version(addrtype)][ripemd160_hash][checksum]
+    // Save version, i.e. addrtype, into first byte of vxcp->vxc_binres
+    vxcp->vxc_binres[0] = vcp->vc_addrtype;
+    output_interval = 1000;
+    gettimeofday(&tvstart, NULL);
 
-	const BN_ULONG rekey_max = 10000000;
-	BN_ULONG npoints, rekey_at, nbatch;
+    unsigned char priv[32];
+    secp256k1_pubkey pubkey;
+    unsigned char pubout[65];
+    size_t pubout_len;
 
-	vg_context_t *vcp = (vg_context_t *) arg;
-	EC_KEY *pkey = NULL;
-	const EC_GROUP *pgroup;
-	const EC_POINT *pgen;
-	const int ptarraysize = 256;
-	EC_POINT *ppnt[ptarraysize];
-	EC_POINT *pbatchinc;
-
-	vg_test_func_t test_func = vcp->vc_test;
-	vg_exec_context_t ctx;
-	vg_exec_context_t *vxcp;
-
-	struct timeval tvstart;
-
-
-	memset(&ctx, 0, sizeof(ctx));
-	vxcp = &ctx;
-
-	vg_exec_context_init(vcp, &ctx);
-
-	pkey = vxcp->vxc_key;
-	pgroup = EC_KEY_get0_group(pkey);
-	pgen = EC_GROUP_get0_generator(pgroup);
-
-	for (i = 0; i < ptarraysize; i++) {
-		ppnt[i] = EC_POINT_new(pgroup);
-		if (!ppnt[i]) {
-			fprintf(stderr, "ERROR: out of memory?\n");
-			exit(1);
-		}
-	}
-	pbatchinc = EC_POINT_new(pgroup);
-	if (!pbatchinc) {
-		fprintf(stderr, "ERROR: out of memory?\n");
-		exit(1);
-	}
-
-	BN_set_word(vxcp->vxc_bntmp, ptarraysize);
-	EC_POINT_mul(pgroup, pbatchinc, vxcp->vxc_bntmp, NULL, NULL,
-		     vxcp->vxc_bnctx);
-	EC_POINT_make_affine(pgroup, pbatchinc, vxcp->vxc_bnctx);
-
-	npoints = 0;
-	rekey_at = 0;
-	nbatch = 0;
-	vxcp->vxc_key = pkey;
-	// Input data for base58check: [version(addrtype)][ripemd160_hash][checksum]
-	// Save version, i.e. addrtype, into first byte of vxcp->vxc_binres
-	vxcp->vxc_binres[0] = vcp->vc_addrtype;
-	c = 0;
-	output_interval = 1000;
-	gettimeofday(&tvstart, NULL);
-
-	if (vcp->vc_format == VCF_SCRIPT) {
-		hash_buf[ 0] = 0x51;  // OP_1
-		hash_buf[ 1] = 0x41;  // pubkey length
-		// gap for pubkey
-		hash_buf[67] = 0x51;  // OP_1
-		hash_buf[68] = 0xae;  // OP_CHECKMULTISIG
-		eckey_buf = hash_buf + 2;
-		hash_len = 69;
-
-	} else {
-		eckey_buf = hash_buf;
-		hash_len = (vcp->vc_compressed)?33:65;
-	}
-
-	while (!vcp->vc_halt) {
-		if (++npoints >= rekey_at) {
-			vg_exec_context_upgrade_lock(vxcp);
-		regen_key:
-			/* Generate a new random private key */
-			EC_KEY_generate_key(pkey);
-			if (vcp->vc_privkey_prefix_nbits > 0) {
-				/* Adjust private key to meet the requirement of privkey prefix (specified by option -Z) */
-				BIGNUM *pkbn = BN_dup(EC_KEY_get0_private_key(pkey));
-				unsigned char pkey_arr[32];
-				assert(BN_bn2bin(pkbn, pkey_arr) < 33);
-				copy_nbits((unsigned char *) pkey_arr, (unsigned char *)vcp->vc_privkey_prefix, vcp->vc_privkey_prefix_nbits);
-				BN_bin2bn(pkey_arr, 32, pkbn);
-				if (BN_is_zero(pkbn)) {
-					fprintf(stderr, "the generated private key is zero, regenerate it\n");
-					goto regen_key;
-				}
-				// FIXME: private key (pbkn) may be too big if prefix specified by -Z has many FF
-				EC_KEY_set_private_key(pkey, pkbn); /* set private key in pkey */
-
-				EC_POINT *origin = EC_POINT_new(pgroup);
-				/* EC_POINT_mul: compute public_key = k * private_key
-				   here, origin is public_key, pkbn is private_key
-				   save public_key into 2nd param (origin) */
-				EC_POINT_mul(pgroup, origin, pkbn, NULL, NULL, vxcp->vxc_bnctx);
-				EC_KEY_set_public_key(pkey, origin); /* set public key in pkey */
-			}
-			npoints = 0;
-
-			/* Determine rekey interval */
-			EC_GROUP_get_order(pgroup, vxcp->vxc_bntmp,
-					   vxcp->vxc_bnctx);
-			BN_sub(vxcp->vxc_bntmp2,
-			       vxcp->vxc_bntmp,
-			       EC_KEY_get0_private_key(pkey));
-			rekey_at = BN_get_word(vxcp->vxc_bntmp2);
-			if ((rekey_at == 0xffffffffL) || (rekey_at > rekey_max))
-				rekey_at = rekey_max;
-			assert(rekey_at > 0);
-
-			EC_POINT_copy(ppnt[0], EC_KEY_get0_public_key(pkey));
-			vg_exec_context_downgrade_lock(vxcp);
-
-			npoints++;
-			vxcp->vxc_delta = 0;
-
-			if (vcp->vc_pubkey_base)
-				EC_POINT_add(pgroup,
-					     ppnt[0],
-					     ppnt[0],
-					     vcp->vc_pubkey_base,
-					     vxcp->vxc_bnctx);
-
-			for (nbatch = 1;
-			     (nbatch < ptarraysize) && (npoints < rekey_at);
-			     nbatch++, npoints++) {
-				EC_POINT_add(pgroup,
-					     ppnt[nbatch],
-					     ppnt[nbatch-1],
-					     pgen, vxcp->vxc_bnctx);
-			}
-
-		} else {
-			/*
-			 * Common case
-			 *
-			 * EC_POINT_add() can skip a few multiplies if
-			 * one or both inputs are affine (Z_is_one).
-			 * This is the case for every point in ppnt, as
-			 * well as pbatchinc.
-			 */
-			assert(nbatch == ptarraysize);
-			for (nbatch = 0;
-			     (nbatch < ptarraysize) && (npoints < rekey_at);
-			     nbatch++, npoints++) {
-				/* compute public keys from continuous private key,
-				   save public keys into array ppnt */
-				EC_POINT_add(pgroup,
-					     ppnt[nbatch],
-					     ppnt[nbatch],
-					     pbatchinc,
-					     vxcp->vxc_bnctx);
-			}
-		}
-
-		/*
-		 * The single most expensive operation performed in this
-		 * loop is modular inversion of ppnt->Z.  There is an
-		 * algorithm implemented in OpenSSL to do batched inversion
-		 * that only does one actual BN_mod_inverse(), and saves
-		 * a _lot_ of time.
-		 *
-		 * To take advantage of this, we batch up a few points,
-		 * and feed them to EC_POINTs_make_affine() below.
-		 */
-
-		EC_POINTs_make_affine(pgroup, nbatch, ppnt, vxcp->vxc_bnctx);
-
-		for (i = 0; i < nbatch; i++, vxcp->vxc_delta++) {
-			/* Hash the public key */
-			len = EC_POINT_point2oct(pgroup, ppnt[i],
-						 (vcp->vc_compressed)?POINT_CONVERSION_COMPRESSED:POINT_CONVERSION_UNCOMPRESSED,
-						 eckey_buf,
-						 (vcp->vc_compressed)?33:65,
-						 vxcp->vxc_bnctx);
-			assert(len == 65 || len == 33);
-			if (vcp->vc_addrtype == ADDR_TYPE_ETH) {
-				// Save ETH address into vxcp->vxc_binres
-				eth_pubkey2addr(eckey_buf, vxcp->vxc_vc->vc_format, vxcp->vxc_binres);
-			} else if (TRXFlag == 1) {
-				// See: https://secretscan.org/PrivateKeyTron
-				SHA3_256(hash1, eckey_buf + 1, 64); // skip 1 byte (the leading 0x04) in uncompressed public key
-				memcpy(&vxcp->vxc_binres[1], hash1 + 12, 20); // skip first 12 bytes in public key hash
-			} else {
-				SHA256(hash_buf, hash_len, hash1);
-				RIPEMD160(hash1, sizeof(hash1), &vxcp->vxc_binres[1]);
-			}
-
-			switch (test_func(vxcp)) {
-			case 1:
-				npoints = 0;
-				rekey_at = 0;
-				i = nbatch;
-				break;
-			case 2:
-				goto out;
-			default:
-				break;
-			}
-		}
-
-		c += i;
-		if (c >= output_interval) {
-			output_interval = vg_output_timing(vcp, c, &tvstart);
-			if (output_interval > 250000)
-				output_interval = 250000;
-			c = 0;
-		}
-
-		vg_exec_context_yield(vxcp);
-	}
+    while (!vcp->vc_halt) {
+        // 1) Generate random private scalar
+        if (unlikely(RAND_bytes(priv, sizeof(priv)) != 1)) continue;
+        // 2) Create pubkey
+        if (unlikely(!secp256k1_ec_pubkey_create(secp_ctx, &pubkey, priv))) continue;
+        // 3) Serialize to compressed/uncompressed
+        pubout_len = vcp->vc_compressed ? 33 : 65;
+        if (unlikely(!secp256k1_ec_pubkey_serialize(
+                secp_ctx, pubout, &pubout_len,
+                &pubkey,
+                vcp->vc_compressed
+                  ? SECP256K1_EC_COMPRESSED
+                  : SECP256K1_EC_UNCOMPRESSED))) continue;
+        // 4) Hash the serialized public key into vxcp->vxc_binres
+        if (vcp->vc_addrtype == ADDR_TYPE_ETH) {
+            eth_pubkey2addr(pubout, vcp->vc_format, vxcp->vxc_binres);
+        } else if (TRXFlag) {
+            SHA3_256(hash1, pubout + 1, 64);
+            memcpy(&vxcp->vxc_binres[1], hash1 + 12, 20);
+        } else {
+            SHA256(pubout, pubout_len, hash1);
+            RIPEMD160(hash1, sizeof(hash1), &vxcp->vxc_binres[1]);
+        }
+        // 5) Test and output as before
+        switch (test_func(vxcp)) {
+        case 1:
+            continue;
+        case 2:
+            goto out;
+        default:
+            break;
+        }
+        vg_exec_context_yield(vxcp);
+    }
 
 out:
-	vg_exec_context_del(&ctx);
-	vg_context_thread_exit(vcp);
-
-	for (i = 0; i < ptarraysize; i++)
-		if (ppnt[i])
-			EC_POINT_free(ppnt[i]);
-	if (pbatchinc)
-		EC_POINT_free(pbatchinc);
-	return NULL;
+    vg_exec_context_del(&ctx);
+    vg_context_thread_exit(vcp);
+    return NULL;
 }
 
 int
@@ -973,7 +807,20 @@ main(int argc, char **argv)
 	if (simulate)
 		return 0;
 
-	if (!start_threads(vcp, nthreads))
-		return 1;
-	return 0;
+    // Initialize secp256k1 context before starting threads
+    secp_ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
+    if (secp_ctx == NULL) {
+        fprintf(stderr, "ERROR: could not create secp256k1 context\n");
+        return 1;
+    }
+    if (!start_threads(vcp, nthreads)) {
+        if (secp_ctx) {
+            secp256k1_context_destroy(secp_ctx);
+        }
+        return 1;
+    }
+    if (secp_ctx) {
+        secp256k1_context_destroy(secp_ctx);
+    }
+    return 0;
 }

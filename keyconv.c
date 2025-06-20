@@ -1,8 +1,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <math.h>
-#include <assert.h>
 
 #include <openssl/evp.h>
 #include <openssl/bn.h>
@@ -77,8 +75,8 @@ main(int argc, char **argv)
 /*BEGIN ALTCOIN GENERATOR*/
 
 		case 'C':
-			strcpy(ticker, optarg);
-			strcat(ticker, " ");
+			/* prefix ticker with trailing space */
+			snprintf(ticker, sizeof(ticker), "%s ", optarg);
 			addrtype_override = 1;
 			/* Start AltCoin Generator */
 			if (strcmp(optarg, "LIST")== 0) {
@@ -182,6 +180,10 @@ main(int argc, char **argv)
 	OpenSSL_add_all_algorithms();
 
 	pkey = EC_KEY_new_by_curve_name(NID_secp256k1);
+	if (pkey == NULL) {
+		fprintf(stderr, "ERROR: Could not create EC_KEY\n");
+		return 1;
+	}
 
 	if (generate) {
 		unsigned char *pend = (unsigned char *) pbuf;
@@ -202,6 +204,7 @@ main(int argc, char **argv)
 
 	if (optind >= argc) {
 		res = fread(pbuf, 1, sizeof(pbuf) - 1, stdin);
+		if (res >= sizeof(pbuf)) res = sizeof(pbuf) - 1;
 		pbuf[res] = '\0';
 		key_in = pbuf;
 	} else {
