@@ -15,7 +15,7 @@
 # brew install pcre
 
 LIBS=-lpcre -lcrypto -lm -lpthread
-CFLAGS=-ggdb -O3 -Wall -Wno-deprecated
+CFLAGS=-ggdb -O3 -march=native -funroll-loops -Wall -Wno-deprecated
 # CFLAGS=-ggdb -Wall -Wno-deprecated -fsanitize=address
 # CFLAGS=-ggdb -O3 -Wall -I /usr/local/cuda-10.2/include/
 
@@ -56,8 +56,9 @@ keyconv: keyconv.o util.o groestl.o sha3.o
 
 run_tests.o: tests.h util_test.h segwit_addr_test.h pattern_test.h
 
+CHECK_LIBS := $(shell pkg-config --libs check 2>/dev/null || echo -lcheck)
 run_tests: run_tests.o util.o groestl.o sha3.o bech32.o segwit_addr.o
-	$(CC) $^ -o $@ $(CFLAGS) $(LIBS) $(OPENCL_LIBS) -lcheck
+	$(CC) $^ -o $@ $(CFLAGS) $(LIBS) $(OPENCL_LIBS) $(CHECK_LIBS)
 
 test: run_tests
 	./run_tests
